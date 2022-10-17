@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework import serializers
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -16,10 +17,12 @@ from .filters import TitleFilter
 from .permissions import (IsAdminOrReadOnly,
                           IsAuthorOrReadOnly, IsSuperUserOrAdmin)
 from .serializers import (CategorySerializer, CommentSerializer,
-                          GenreSerializer, ReviewObjectSerializer,
-                          ReviewSerializer, SignUpSerializer,
+                          GenreSerializer, ReviewSerializer, SignUpSerializer,
                           TitleSerializerReadOnly, TitleSerializerWritable,
                           TokenSerializer, UserSerializer)
+
+
+UNIQUE_REVIEW_MESSAGE = 'Вы уже оставляли ревью к этому произведению!'
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -28,18 +31,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
     filter_backends = (filters.SearchFilter,)
     search_fields = ('text', )
     pagination_class = LimitOffsetPagination
+    serializer_class = ReviewSerializer
+    
+    def get_title(self):
+        return get_object_or_404(Title, id=self.kwargs.get('title_id'))
 
     def get_queryset(self):
-        return Review.objects.filter(title_id=self.kwargs.get('title_id'))
-
-    def get_serializer_class(self):
-        if self.action in ('list', 'create'):
-            return ReviewSerializer
-        return ReviewObjectSerializer
-
+        return self.get_title().reviews.all()
+    
     def perform_create(self, serializer):
-        title_id = self.kwargs.get('title_id')
-        title = get_object_or_404(Title, id=title_id)
+        title = self.get_title()
+        if title.reviews.filter(author=self.request.user).exists():
+            raise serializers.ValidationError(UNIQUE_REVIEW_MESSAGE)
         serializer.save(author=self.request.user, title=title)
 
 
@@ -50,15 +53,15 @@ class CommentViewSet(viewsets.ModelViewSet):
     filter_backends = (filters.SearchFilter, )
     search_fields = ('text', )
 
-    def get_review(self, review_id):
-        return get_object_or_404(Review, id=review_id)
+    def get_review(self):
+        return get_object_or_404(Review, id=self.kwargs.get('review_id'))
 
     def get_queryset(self):
-        return self.get_review(self.kwargs.get('review_id')).comments.all()
+        return self.get_review().comments.all()
 
     def perform_create(self, serializer):
         serializer.save(
-            review=self.get_review(self.kwargs.get('review_id')),
+            review=self.get_review(),
             author=self.request.user
         )
 

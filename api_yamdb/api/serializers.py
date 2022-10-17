@@ -1,4 +1,5 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from reviews.models import Category, Comment, Genre, Review, Title, User
@@ -7,7 +8,6 @@ from reviews.validators import validate_username, validate_year
 from api_yamdb.settings import EMAIL_MAX_LENGTH, NAME_MAX_LENGTH
 
 VALDATE_SCORE = 'Come On! Поставьте оценку от 1 до 10!'
-UNIQUE_REVIEW_MESSAGE = 'Вы уже оставляли ревью к этому произведению!'
 UNIQUE_EMAIL_MESSAGE = 'Пользователь с таким email уже существует'
 
 
@@ -61,7 +61,7 @@ class TokenSerializer(serializers.ModelSerializer):
         fields = ('username', 'confirmation_code')
 
 
-class ReviewObjectSerializer(serializers.ModelSerializer):
+class ReviewSerializer(serializers.ModelSerializer):
     '''Serializer for Review model - RETRIEVE, UPDATE or DESTROY actions.'''
     author = serializers.SlugRelatedField(
         slug_field='username',
@@ -72,19 +72,8 @@ class ReviewObjectSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        fields = '__all__'
+        fields = ('id', 'author', 'text', 'pub_date', 'score')
         model = Review
-        read_only_fields = ('title',)
-
-
-class ReviewSerializer(ReviewObjectSerializer):
-    '''Serializer for Review model - CREATE and LIST actions.'''
-    def validate(self, data):
-        title = self.context['view'].kwargs['title_id']
-        author = self.context['request'].user
-        if Review.objects.filter(title=title, author=author).exists():
-            raise serializers.ValidationError(UNIQUE_REVIEW_MESSAGE)
-        return data
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -94,8 +83,7 @@ class CommentSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        fields = '__all__'
-        read_only_fields = ('review',)
+        fields = ('id', 'author', 'text', 'pub_date')
         model = Comment
 
 
